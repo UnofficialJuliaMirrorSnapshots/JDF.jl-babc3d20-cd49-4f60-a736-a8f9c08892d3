@@ -9,10 +9,12 @@ using BufferedStreams
 #using RLEVectors
 using WeakRefStrings
 using Blosc
-using Serialization: serialize, deserialize
+
+
 using StatsBase: rle, inverse_rle, countmap
 
 import Base: size, show, getindex, setindex!, eltype
+
 if VERSION >= v"1.3.0-rc1"
     import Base.Threads: @spawn
 else
@@ -20,7 +22,13 @@ else
         println("parallel version do not work in < Julia 1.3")
     end
 end
-# using RLEVectors
+
+# if VERSION >= v"1.1"
+using Serialization: serialize, deserialize
+# else
+#     using Compat.Serialization: serialize, deserialize
+# end
+
 
 export savejdf, loadjdf, nonmissingtype, gf, iow, ior, compress_then_write
 export column_loader!, gf2, ssavejdf, type_compress!, type_compress, sloadjdf
@@ -56,67 +64,60 @@ savejdf(outdir, df) =begin
         return ssavejdf(outdir, df)
     end
 
-#io  = open(outdir, "w")
     pmetadatas = Any[missing for i = 1:length(names(df))]
-#for (name, b) in zip(names(df), eachcol(df))
+
     if !isdir(outdir)
         mkpath(outdir)
     end
-    ios = BufferedOutputStream.(open.(
-        joinpath.(outdir, string.(names(df))),
-        Ref("w"),
-    ))
 
-    for i = 1:length(names(df))
-    #el = @elapsed push!(metadatas, compress_then_write(Array(b), io))
-#println("Start: "*string(Threads.threadid()))
-        pmetadatas[i] = @spawn compress_then_write(Array(df[!, i]), ios[i])
-#pmetadatas[i] = compress_then_write(Array(df[!,i]), ios[i])
-#println("End: "*string(Threads.threadid()))
-    #println("saving $name took $el. Type: $(eltype(Array(b)))")
+    # use a bounded channel to limit
+    c1 = Channel{Bool}(Threads.nthreads())
+    atexit(()->close(c1))
+
+    for (i, n) in enumerate(names(df))
+        put!(c1, true)
+        pmetadatas[i] = @spawn begin
+            io = BufferedOutputStream(open(joinpath(outdir, string(n)) ,"w"))
+            res = compress_then_write(Array(df[!, i]), io)
+            close(io)
+            res
+        end
+        take!(c1)
     end
-#close(io)
+
     metadatas = fetch.(pmetadatas)
-    close.(ios)
 
     fnl_metadata = (
         names = names(df),
         rows = size(df, 1),
-        metadatas = metadatas,
-    )#, pmetadatas = pmetadatas)
+        metadatas = metadatas
+    )
 
     serialize(joinpath(outdir, "metadata.jls"), fnl_metadata)
     fnl_metadata
 end
 
+"""
+    serially save a DataFrames to the outdir
+"""
 ssavejdf(outdir, df::DataFrame) = begin
-    """
-        serially save a DataFrames to the outdir
-    """
-#io  = open(outdir, "w")
-    metadatas = Any[missing for i = 1:length(names(df))]
-#for (name, b) in zip(names(df), eachcol(df))
+    pmetadatas = Any[missing for i = 1:length(names(df))]
+
     if !isdir(outdir)
         mkpath(outdir)
     end
-    ios = BufferedOutputStream.(open.(
-        joinpath.(outdir, string.(names(df))),
-        Ref("w"),
-    ))
 
     for i = 1:length(names(df))
-    #el = @elapsed push!(metadatas, compress_then_write(Array(b), io))
-#println("Start: "*string(Threads.threadid()))
-        metadatas[i] = compress_then_write(Array(df[!, i]), ios[i])
-#pmetadatas[i] = compress_then_write(Array(df[!,i]), ios[i])
-#println("End: "*string(Threads.threadid()))
-    #println("saving $name took $el. Type: $(eltype(Array(b)))")
+        io = BufferedOutputStream(open(joinpath(outdir, string(names(df)[i])), "w"))
+        pmetadatas[i] = compress_then_write(Array(df[!, i]), io)
+        close(io)
     end
-    close.(ios)
+
+
     fnl_metadata = (
         names = names(df),
         rows = size(df, 1),
-        metadatas = metadatas,
+        metadatas = pmetadatas
     )
 
     serialize(joinpath(outdir, "metadata.jls"), fnl_metadata)
