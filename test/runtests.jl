@@ -1,15 +1,33 @@
 using JDF
 using Test
 using DataFrames
+using Random:randstring
 
 include("test-categorical-ararys.jl")
+include("test-stringarray.jl")
 
 @testset "JDF.jl parallel" begin
     df = DataFrame([collect(1:100) for i =1:3000])
+    df[!, :int_missing] =
+        rand(
+            [rand(rand([UInt, Int, Float64, Float32, Bool])), missing],
+            nrow(df)
+        )
+        
+    df[!, :missing] .= missing
+    df[!, :strs] = [randstring(8) for i in 1:nrow(df)]
+    df[!, :stringarray] = StringVector([randstring(8) for i in 1:nrow(df)])
+
+    df[!, :strs_missing] = [rand([missing, randstring(8)]) for i in 1:nrow(df)]
+    df[!, :stringarray_missing] = StringVector([rand([missing, randstring(8)]) for i in 1:nrow(df)])
+
     savejdf("a.jdf", df)
 
-    @test size(loadjdf("a.jdf"), 2) == 3000
-    @test size(loadjdf("a.jdf"), 1) == 100
+    df2 = loadjdf("a.jdf")
+    @test ncol(df2) == 3006
+    @test nrow(df2) == 100
+
+    @test all(all(isequal(df[!,n], df2[!, n])) for n in names(df))
 
     # clean up
     rm("a.jdf", force=true, recursive=true)
@@ -17,24 +35,22 @@ end
 
 @testset "JDF.jl serial" begin
     df = DataFrame([collect(1:100) for i =1:3000])
-    ssavejdf("a2.jdf", df)
+    df[!, :int_missing] =  rand([rand(rand([UInt, Int, Float64, Float32, Bool])), missing], nrow(df))
+    df[!, :missing] .= missing
+    df[!, :strs] = [randstring(8) for i in 1:nrow(df)]
+    df[!, :stringarray] = StringVector([randstring(8) for i in 1:nrow(df)])
 
-    @test size(sloadjdf("a2.jdf"), 2) == 3000
-    @test size(sloadjdf("a2.jdf"), 1) == 100
+    df[!, :strs_missing] = [rand([missing, randstring(8)]) for i in 1:nrow(df)]
+    df[!, :stringarray_missing] = StringVector([rand([missing, randstring(8)]) for i in 1:nrow(df)])
 
-    rm("a2.jdf", force=true, recursive=true)
-end
+    ssavejdf("a.jdf", df)
 
-@testset "JDF.jl categorical" begin
-    df = DataFrame([collect(1:100) for i =1:3])
-    df[!, :x1] = categorical(df[!, :x1])
-    df[!, :x2] = categorical(string.(df[!, :x2]))
-    ssavejdf("a2cate.jdf", df)
+    df2 = sloadjdf("a.jdf")
+    @test ncol(df2) == 3006
+    @test nrow(df2) == 100
 
-    @test size(sloadjdf("a2cate.jdf"), 2) == 3
-    @test size(sloadjdf("a2cate.jdf"), 1) == 100
-    @time df[!, :x1] isa CategoricalVector{Int}
-    @time df[!, :x2] isa CategoricalVector{String}
+    @test all(all(isequal(df[!,n], df2[!, n])) for n in names(df))
 
-    rm("a2cate.jdf", force=true, recursive=true)
+    # clean up
+    rm("a.jdf", force=true, recursive=true)
 end
