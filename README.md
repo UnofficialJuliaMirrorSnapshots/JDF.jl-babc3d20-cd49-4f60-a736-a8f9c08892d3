@@ -1,12 +1,20 @@
 # JDF
-An experimental `DataFrame`s serialization format with the following goals
+
+A Julia `DataFrame`s serialization format with the following goals
 * Fast save and load times
 * Compressed storage on disk
+* Enable disk-based data manipulation (not yet achieved; from v0.4.0)
+* Supports machine learning workloads, e.g. mini-batch, sampling (not yet achieved; from v0.4.0)
 
 JDF stores a `DataFrame` in a folder with each column stored as a separate file.
 There is also a `metadata.jls` file that stores metadata about the original
 `DataFrame`. Collectively, the column files, the metadata file, and the folder
 is called a JDF "file".
+
+## Please note
+
+The next version of JDF which is v0.3 will contain breaking changes. But don't worry I am fully committed to providing an automatic upgrade path for JDF v0.2 users. This means that you can safely use JDF.jl v0.2 to save your data and not have to worry about the impending breaking change breaking all your JDF files.
+
 
 ## Example: Quick Start
 
@@ -21,8 +29,8 @@ By default JDF loads and saves `DataFrame`s using multiple threads starting from
 Julia 1.3. For Julia < 1.3, it saves and loads using one thread only.
 
 ```julia
-@time metadatas = savejdf("c:/data/iris.jdf", a)
-@time a2 = loadjdf("c:/data/iris.jdf")
+@time metadatas = savejdf("iris.jdf", a)
+@time a2 = loadjdf("iris.jdf")
 ```
 
 Simple checks for correctness
@@ -35,7 +43,7 @@ all(skipmissing([all(a2[!,name] .== Array(a[!,name])) for name in names(a2)])) #
 You can load only a few columns from the dataset by specifying `cols =
 [:column1, :column2]`. For example
 ```julia
-a2_selected = loadjdf("c:/data/iris.jdf", cols = [:species, :sepalLength, :petalWidth])
+a2_selected = loadjdf("iris.jdf", cols = [:species, :sepalLength, :petalWidth])
 ```
 The difference with loading the whole datasets and then subsetting the columns
 is that it saves time as only the selected columns are loaded from disk.
@@ -67,11 +75,11 @@ nrow(jdf"plsdel.jdf") # 3
 
 ncol(jdf"plsdel.jdf") # 2
 
-size(jdf"plsdel.jdf") # (2, 3)
+size(jdf"plsdel.jdf") # (3, 2)
 
-size(jdf"plsdel.jdf", 1) # (2, 3)
+size(jdf"plsdel.jdf", 1) # 2
 
-size(jdf"plsdel.jdf", 1) # (2, 3)
+size(jdf"plsdel.jdf", 2) # 3
 
 # clean up
 rm("plsdel.jdf", force = true, recursive = true)
@@ -81,8 +89,8 @@ rm("plsdel.jdf", force = true, recursive = true)
 You can use the `ssavejdf` and `sloadjdf` function to save a `DataFrame`
 serially, i.e. without using parallel processes.
 ```julia
-@time metadatas = ssavejdf("c:/data/iris.jdf", a)
-@time metadatas = sloadjdf("c:/data/iris.jdf")
+@time metadatas = ssavejdf("iris.jdf", a)
+@time metadatas = sloadjdf("iris.jdf")
 ```
 
 ### Additional functionality: In memory `DataFrame` compression
@@ -132,7 +140,7 @@ There is support for
 * `Vector{T}`
 * `CategoricalArrays.CategoricalVetors{T}`
 
-where `T` can be `String`, `Bool`, and `isbits` types i.e. `UInt*`, `Int*`,
+where `T` can be `String`, `Bool`, `Symbol`, and `isbits` types i.e. `UInt*`, `Int*`,
 and `Float*` `Date*` types etc.
 
 `RLEVectors` support will be considered in the future when `missing` support
@@ -152,13 +160,11 @@ Encoding (RLE) representation, and the lengths component in the RLE are `Blosc`
 compressed.
 
 ## Development Plans
-I will prioritize bugs fixes but once I consider the format stable I will freeze
-development unless a bug is reported. So new features will be slow to come
-onboard. This is because I have other OSS commitments including [R's
-{disk.frame}](http:/diskframe.com).
+I fully intend to develop JDF.jl into a language neutral format by version v0.4. However, I have other OSS commitments including [R's
+{disk.frame}](http:/diskframe.com) and hence new features might be slow to come onboard. But I am fully committed to making JDF files created using JDF.jl v0.2 or higher loadable in all future JDF.jl versions.
 
 ## Notes
 
-* Julia 1.0 is not supported as the `serialize` function is only available from 1.1.
+* Julia 1.0 is not supported as the `serialize` function used by JDF.jl is only available from 1.1.
 * Parallel read and write support is only available from Julia 1.3.
 * The design of JDF was inspired by [fst](fstpackage.org) in terms of using compressions and allowing random-access to columns
