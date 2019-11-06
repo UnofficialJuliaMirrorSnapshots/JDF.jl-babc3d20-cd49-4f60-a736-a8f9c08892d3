@@ -1,3 +1,4 @@
+
 """
     loadjdf(indir, verbose = true)
 
@@ -5,20 +6,20 @@
 
 Load a `DataFrame` from JDF saved at `outdir`. On Julia > v1.3, a multithreaded
 version is used.
-
-
-
 """
 loadjdf(indir; cols = Symbol[], verbose = false) = begin
 	if VERSION < v"1.3.0-rc1.0"
-		return sloadjdf(indir, verbose = verbose)
+		return sloadjdf(indir, cols = cols, verbose = verbose)
 	end
 
 	if verbose
 		println("loading $indir in parallel")
 	end
 
-	metadatas = deserialize(joinpath(indir,"metadata.jls"))
+	metadatas = open(joinpath(indir,"metadata.jls")) do io
+		 deserialize(io)
+	end
+
 	if length(cols) == 0
 		cols = metadatas.names
 	else
@@ -71,12 +72,14 @@ loadjdf(indir; cols = Symbol[], verbose = false) = begin
  	df
 end
 
-loadjdf(jdf::JDFFile; args...) = loadjdf(jdf.path, args...)
-sloadjdf(jdf::JDFFile;  args...) = sloadjdf(jdf.path,  args...)
+loadjdf(jdf::JDFFile; args...) = loadjdf(jdf.path; args...)
+sloadjdf(jdf::JDFFile; args...) = sloadjdf(jdf.path; args...)
 
 # load the data from file with a schema
 sloadjdf(indir; cols = Symbol[], verbose = false) = begin
-	metadatas = deserialize(joinpath(indir,"metadata.jls"))
+	metadatas = open(joinpath(indir,"metadata.jls")) do io
+		deserialize(io)
+	end
 
 	if length(cols) == 0
 		cols = metadatas.names

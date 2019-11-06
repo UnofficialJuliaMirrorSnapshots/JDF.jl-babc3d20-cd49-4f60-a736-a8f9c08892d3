@@ -11,6 +11,11 @@ There is also a `metadata.jls` file that stores metadata about the original
 `DataFrame`. Collectively, the column files, the metadata file, and the folder
 is called a JDF "file".
 
+`JDF.jl` is Julia-only solution and there are a lot of ways to do nifty things
+like compression and encapsulating the underlying struture of the arrays that's
+hard to do in R and Python. E.g. Python's numpy arrays are C objects, but all
+the vector types used in JDF are Julia data types.
+
 ## Please note
 
 The next version of JDF which is v0.3 will contain breaking changes. But don't worry I am fully committed to providing an automatic upgrade path for JDF v0.2 users. This means that you can safely use JDF.jl v0.2 to save your data and not have to worry about the impending breaking change breaking all your JDF files.
@@ -113,6 +118,27 @@ type_compress!(df, compress_float = true)
 `String` compression is _planned_ and will likely employ categorical encoding
 combined with RLE encoding.
 
+### Load each column from disk
+You can load each column of a JDF file from disk
+
+```julia
+jdffile = jdf"iris.jdf"
+for col in eachcol(jdffile)  
+  # do something to col
+  # where `col` is the content of one column of iris.jdf
+end
+```
+
+To iterate through the columns names and the `col`
+
+```julia
+jdffile = jdf"iris.jdf"
+for (name, col) in zip(names(jdffile), eachcol(jdffile))
+  # `name::Symbol` is the name of the column
+  #  `col` is the content of one column of iris.jdf
+end
+```
+
 ## Benchmarks
 Here are some benchmarks using the [Fannie Mae Mortgage
 Data](https://docs.rapids.ai/datasets/mortgage-data). Please note that a reading
@@ -137,22 +163,21 @@ I believe that restricting the types that JDF supports is vital for simplicity a
 
 There is support for
 * `WeakRefStrings.StringVector`
-* `Vector{T}`
+* `Vector{T}`, `Vector{Union{Mising, T}}`, `Vector{Union{Nothing, T}}`
 * `CategoricalArrays.CategoricalVetors{T}`
 
-where `T` can be `String`, `Bool`, `Symbol`, and `isbits` types i.e. `UInt*`, `Int*`,
+where `T` can be `String`, `Bool`, `Symbol`, `Char`, `TimeZones.ZonedDateTime` (experimental) and `isbits` types i.e. `UInt*`, `Int*`,
 and `Float*` `Date*` types etc.
 
 `RLEVectors` support will be considered in the future when `missing` support
 arrives for `RLEVectors.jl`.
 
-## How does JDF work?
-Although JDF is experimental, there are a few tricks up Julia's sleeve. Firstly,
-this is a purely Julia solution and there are a lot of ways to do nifty things
-like compression and encapsulating the underlying struture of the arrays that's
-hard to do in R and Python. E.g. Python's numpy arrays are C objects, but all
-the vector types used in JDF are Julia data types.
+## Resources
 
+[@bkamins](https://github.com/bkamins/)'s [excellent DataFrames.jl tutorial](https://github.com/bkamins/Julia-DataFrames-Tutorial/blob/master/04_loadsave.ipynb) contains a section on using JDF.jl.
+
+
+## How does JDF work?
 When saving a JDF, each vector is Blosc compressed (using the default settings)
 if possible; this includes all `T` and `Unions{Missing, T}` types where `T` is
 `isbits`. For `String` vectors, they are first converted to a  Run Length
@@ -168,3 +193,4 @@ I fully intend to develop JDF.jl into a language neutral format by version v0.4.
 * Julia 1.0 is not supported as the `serialize` function used by JDF.jl is only available from 1.1.
 * Parallel read and write support is only available from Julia 1.3.
 * The design of JDF was inspired by [fst](fstpackage.org) in terms of using compressions and allowing random-access to columns
+
