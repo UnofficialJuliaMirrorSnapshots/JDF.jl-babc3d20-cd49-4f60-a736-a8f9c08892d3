@@ -53,9 +53,8 @@ a2_selected = loadjdf("iris.jdf", cols = [:species, :sepalLength, :petalWidth])
 The difference with loading the whole datasets and then subsetting the columns
 is that it saves time as only the selected columns are loaded from disk.
 
-### Metadata Names & Size from disk
-You can create a variable of type `JDFFile` that allows you to access some
-metadata about the JDF on disk.
+### Some `DataFrame`-like convenience syntax/functions
+To take advatnage of some these convenience functions, you need to create a variable of type `JDFFile` pointed to the JDF file on disk. For example
 
 ```julia
 jdf"path/to/JDF.jdf"
@@ -64,6 +63,49 @@ or
 ```julia
 JDFFile(path_to_JDF)
 ```
+
+#### Using `df[rows, cols]` syntax
+You can load arbitrary `rows` and `cols` using the `df[rows, cols]` syntax. However, some of these operations are not yet optimized and hence may not be efficient.
+
+```julia
+a = JDFFile("iris.jdf")
+
+a[!, :Species] # load Species column
+a[!, [:Species, :PetalLength]] # load Species and PetalLength column
+
+a[:, :Species] # load Species column
+a[:, [:Species, :PetalLength]] # load Species and PetalLength column
+
+@view(a[!, :Species]) # load Species column
+@view(a[!, [:Species, :PetalLength]]) # load Species and PetalLength column
+```
+
+In fact most syntax for `a[rows, cols]` will work **except** for assignments i.e. `a[!, cols] = something` will **not** work.
+
+This was developed to make it possible for [JLBoost.jl](https://github.com/xiaodaigh/JLBoost.jl) to fit models without loading the whole data into memory, and so the functionalities is kept to a minimum for now.
+
+#### Load each column from disk
+You can load each column of a JDF file from disk using iterations
+
+```julia
+jdffile = jdf"iris.jdf"
+for col in eachcol(jdffile)  
+  # do something to col
+  # where `col` is the content of one column of iris.jdf
+end
+```
+
+To iterate through the columns names and the `col`
+
+```julia
+jdffile = jdf"iris.jdf"
+for (name, col) in zip(names(jdffile), eachcol(jdffile))
+  # `name::Symbol` is the name of the column
+  #  `col` is the content of one column of iris.jdf
+end
+```
+
+#### Metadata Names & Size from disk
 You can obtain the column names and size (`nrow` and `ncol`) of a JDF, for
 example:
 
@@ -118,26 +160,7 @@ type_compress!(df, compress_float = true)
 `String` compression is _planned_ and will likely employ categorical encoding
 combined with RLE encoding.
 
-### Load each column from disk
-You can load each column of a JDF file from disk
 
-```julia
-jdffile = jdf"iris.jdf"
-for col in eachcol(jdffile)  
-  # do something to col
-  # where `col` is the content of one column of iris.jdf
-end
-```
-
-To iterate through the columns names and the `col`
-
-```julia
-jdffile = jdf"iris.jdf"
-for (name, col) in zip(names(jdffile), eachcol(jdffile))
-  # `name::Symbol` is the name of the column
-  #  `col` is the content of one column of iris.jdf
-end
-```
 
 ## Benchmarks
 Here are some benchmarks using the [Fannie Mae Mortgage

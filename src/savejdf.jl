@@ -91,7 +91,7 @@ end
 """
     serially save a DataFrames to the outdir
 """
-ssavejdf(outdir, df::DataFrame) = begin
+ssavejdf(outdir, df::AbstractDataFrame) = begin
     pmetadatas = Any[missing for i = 1:length(DataFrames.names(df))]
 
     if !isdir(outdir)
@@ -138,3 +138,4 @@ get_bytes(metadata) = begin
 end
 
 hasfieldnames(::Type{T}) where {T} = fieldnames(T) >= 1
+
